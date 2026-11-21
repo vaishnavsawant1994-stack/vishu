@@ -1,0 +1,25 @@
+# Local secrets, state and tooling
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+release/
+.vite/
+*.log
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.py[cod]
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+.DS_Store
+Thumbs.db
+coverage/
+htmlcov/
