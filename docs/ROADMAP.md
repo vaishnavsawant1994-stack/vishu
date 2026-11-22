@@ -11,10 +11,10 @@ This is an execution roadmap, not a claim that features are already working.
 - [x] Automated backend/API tests and CI configuration
 - [x] Real Windows desktop acceptance with Ollama installed
 - [x] Frontend build and desktop launch validated by CI and Windows smoke tests
-- [x] Installer and packaging (unsigned; model setup remains manual)
+- [x] Installer and packaging (unsigned; Ollama chat model setup remains manual)
 
 ## Phase 2 — Voice and computer (features implemented; device acceptance pending)
-- [x] Offline microphone transcription through Vosk with explicit missing-model errors
+- [x] Offline microphone transcription through Vosk with explicit missing-model errors and a bundled small Indian English model in Windows installers
 - [x] System speech playback with stop control
 - [x] User-selected still-screen capture routed to a configured vision-capable model
 - [x] Native-dialog, read-only text-file sharing with extension and size limits

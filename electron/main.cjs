@@ -7,12 +7,21 @@ const net = require("node:net");
 const { spawn } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
 const { isAllowedTextFile, appendActionAudit } = require("./safety.cjs");
+const { resolveVoskModelPath } = require("./runtime.cjs");
 
 let backend = null;
 let backendPort = null;
 let backendFailure = null;
 const sessionToken = randomBytes(32).toString("hex");
 const activeStreams = new Map();
+
+function getVoskModelPath() {
+  return resolveVoskModelPath({
+    env: process.env,
+    packaged: app.isPackaged,
+    resourcesPath: process.resourcesPath
+  });
+}
 
 function obtainPort() {
   return new Promise((resolve, reject) => {
@@ -75,7 +84,8 @@ async function startBackend() {
       env: {
         ...process.env,
         VISHU_API_TOKEN: sessionToken,
-        VISHU_DB_PATH: path.join(dataDir, "vishu.sqlite3")
+        VISHU_DB_PATH: path.join(dataDir, "vishu.sqlite3"),
+        VISHU_VOSK_MODEL_PATH: getVoskModelPath()
       },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true
@@ -91,7 +101,8 @@ async function startBackend() {
         env: {
           ...process.env,
           VISHU_API_TOKEN: sessionToken,
-          VISHU_DB_PATH: path.join(dataDir, "vishu.sqlite3")
+          VISHU_DB_PATH: path.join(dataDir, "vishu.sqlite3"),
+          VISHU_VOSK_MODEL_PATH: getVoskModelPath()
         },
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true

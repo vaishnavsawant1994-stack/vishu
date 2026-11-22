@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { isAllowedTextFile, appendActionAudit } = require("../safety.cjs");
+const { resolveVoskModelPath } = require("../runtime.cjs");
 
 test("Windows action accepts only small plain text files", () => {
   const regular = { isFile: () => true, size: 99_999 };
@@ -27,4 +28,10 @@ test("action audit stores append-only local JSON records", () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("packaged builds find bundled offline speech model while development stays explicit", () => {
+  assert.equal(resolveVoskModelPath({ env: {}, packaged: true, resourcesPath: "C:\\app\\resources" }), "C:\\app\\resources\\vosk-model");
+  assert.equal(resolveVoskModelPath({ env: {}, packaged: false, resourcesPath: "C:\\app\\resources" }), "");
+  assert.equal(resolveVoskModelPath({ env: { VISHU_VOSK_MODEL_PATH: "  D:\\models\\vosk  " }, packaged: true, resourcesPath: "C:\\app\\resources" }), "D:\\models\\vosk");
 });
