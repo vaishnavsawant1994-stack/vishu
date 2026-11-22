@@ -1,11 +1,12 @@
 """Contract tests for real HTTP model transport without external network access."""
 import json
 import threading
+import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from llm import ModelUnavailable, complete_chat, complete_vision
+from llm import ModelUnavailable, complete_chat, complete_vision, stream_chat
 
 
 def test_openai_compatible_transport(monkeypatch):
@@ -88,3 +89,41 @@ def test_vision_transport_sends_user_selected_image(monkeypatch):
         server.shutdown()
         server.server_close()
         thread.join(timeout=3)
+
+
+def test_openai_compatible_stream_yields_real_delta_text(monkeypatch):
+    observed = {}
+    body = b"".join([
+        b'data: {"choices":[{"delta":{"content":"Hello "}}]}\n\n',
+        b'data: {"choices":[{"delta":{"content":"stream."}}]}\n\n',
+        b"data: [DONE]\n\n",
+    ])
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            observed["payload"] = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        monkeypatch.setenv("VISHU_LLM_BASE_URL", "http://127.0.0.1:" + str(server.server_port) + "/v1")
+        deltas = asyncio.run(_collect_stream())
+        assert deltas == ["Hello ", "stream."]
+        assert observed["payload"]["stream"] is True
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+async def _collect_stream():
+    return [part async for part in stream_chat([{"role": "user", "content": "hello"}], "model-test")]

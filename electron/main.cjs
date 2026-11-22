@@ -1,16 +1,18 @@
 "use strict";
 
-const { app, BrowserWindow, ipcMain, dialog, desktopCapturer } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, desktopCapturer, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const net = require("node:net");
 const { spawn } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
+const { isAllowedTextFile, appendActionAudit } = require("./safety.cjs");
 
 let backend = null;
 let backendPort = null;
 let backendFailure = null;
 const sessionToken = randomBytes(32).toString("hex");
+const activeStreams = new Map();
 
 function obtainPort() {
   return new Promise((resolve, reject) => {
@@ -32,7 +34,7 @@ function isAllowedRequest(method, route) {
   }
   if (method === "POST") {
     return route === "/api/chat" || route === "/api/conversations" ||
-      route === "/api/transcribe" || route === "/api/screen";
+      route === "/api/chat/stream" || route === "/api/transcribe" || route === "/api/screen";
   }
   if (method === "DELETE") {
     return /^\/api\/conversations\/[a-f0-9-]{36}$/.test(route);
@@ -145,6 +147,112 @@ ipcMain.handle("vishu:open-text-file", async (event) => {
   if (!stat.isFile() || stat.size > 100_000) throw new Error("Choose a text file smaller than 100 KB.");
   const content = fs.readFileSync(filePath, "utf8");
   return { name: path.basename(filePath), content };
+});
+
+function recordAction(eventRecord) {
+  appendActionAudit(app.getPath("userData"), eventRecord);
+}
+
+ipcMain.handle("vishu:open-selected-text", async (event) => {
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const choice = await dialog.showOpenDialog(owner, {
+    title: "Choose a text document to open",
+    properties: ["openFile"],
+    filters: [{ name: "Text and data files", extensions: ["txt", "md", "csv", "json", "log"] }]
+  });
+  if (choice.canceled || choice.filePaths.length !== 1) {
+    recordAction({ action: "open-selected-text", decision: "cancelled", file: null });
+    return { opened: false, cancelled: true };
+  }
+  const filePath = choice.filePaths[0];
+  if (!isAllowedTextFile(filePath, fs.statSync(filePath))) {
+    recordAction({ action: "open-selected-text", decision: "rejected", file: path.basename(filePath) });
+    throw new Error("Only plain text and data files can be opened by this action.");
+  }
+  const consent = await dialog.showMessageBox(owner, {
+    type: "question",
+    buttons: ["Open file", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    title: "Confirm Windows action",
+    message: "Open this selected text file with its Windows default application?",
+    detail: path.basename(filePath)
+  });
+  if (consent.response !== 0) {
+    recordAction({ action: "open-selected-text", decision: "denied", file: path.basename(filePath) });
+    return { opened: false, cancelled: true };
+  }
+  recordAction({ action: "open-selected-text", decision: "authorized", file: path.basename(filePath) });
+  const failure = await shell.openPath(filePath);
+  if (failure) {
+    recordAction({ action: "open-selected-text", decision: "failed", file: path.basename(filePath) });
+    throw new Error("Windows could not open the selected text file.");
+  }
+  recordAction({ action: "open-selected-text", decision: "completed", file: path.basename(filePath) });
+  return { opened: true };
+});
+
+ipcMain.on("vishu:cancel-stream", (event, streamId) => {
+  if (typeof streamId !== "string") return;
+  const key = event.sender.id + ":" + streamId;
+  activeStreams.get(key)?.abort();
+});
+
+ipcMain.handle("vishu:chat-stream", async (event, input) => {
+  if (!input || typeof input.streamId !== "string" || input.streamId.length > 80 ||
+      !input.body || typeof input.body !== "object" ||
+      !isAllowedRequest("POST", "/api/chat/stream") || !backendPort) {
+    throw new Error("This streaming action is not authorized.");
+  }
+  const key = event.sender.id + ":" + input.streamId;
+  const controller = new AbortController();
+  activeStreams.set(key, controller);
+  const timeout = setTimeout(() => controller.abort(), 80000);
+  try {
+    const response = await fetch("http://127.0.0.1:" + backendPort + "/api/chat/stream", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + sessionToken,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(input.body),
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(typeof payload.detail === "string" ? payload.detail : "VISHU streaming request failed.");
+    }
+    if (!response.body) throw new Error("VISHU did not provide a response stream.");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = "";
+    const sendFrame = (frame) => {
+      const line = frame.split(/\r?\n/).find((part) => part.startsWith("data:"));
+      if (!line) return;
+      const message = JSON.parse(line.slice(5).trim());
+      if (!event.sender.isDestroyed()) {
+        event.sender.send("vishu:chat-stream-event", { streamId: input.streamId, ...message });
+      }
+    };
+    while (true) {
+      const { value, done } = await reader.read();
+      buffered += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const frames = buffered.split(/\r?\n\r?\n/);
+      buffered = frames.pop() || "";
+      frames.forEach(sendFrame);
+      if (done) {
+        if (buffered.trim()) sendFrame(buffered);
+        break;
+      }
+    }
+    return { complete: true };
+  } catch (error) {
+    if (controller.signal.aborted) return { complete: false, cancelled: true };
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    activeStreams.delete(key);
+  }
 });
 
 function createWindow() {

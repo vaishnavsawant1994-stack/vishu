@@ -31,6 +31,18 @@ declare global {
     vishu?: {
       request: (method: ApiMethod, path: string, body?: unknown) => Promise<unknown>;
       openTextFile: () => Promise<{name: string; content: string} | null>;
+      openSelectedText: () => Promise<{opened: boolean; cancelled?: boolean}>;
+      chatStream: (streamId: string, body: {text: string; conversation_id: string | null}) =>
+        Promise<{complete: boolean; cancelled?: boolean}>;
+      cancelStream: (streamId: string) => void;
+      onChatStream: (callback: (event: {
+        streamId: string;
+        type: "delta" | "done" | "error";
+        text?: string;
+        message?: string;
+        conversation_id?: string;
+        model?: string;
+      }) => void) => () => void;
     };
   }
 }

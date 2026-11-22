@@ -7,6 +7,8 @@ import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import httpx
+
 
 SYSTEM_PROMPT = (
     "You are VISHU, a helpful personal AI assistant. Be accurate, concise "
@@ -81,3 +83,42 @@ def complete_vision(question: str, image_data_url: str, model: str) -> str:
         return answer.strip()
     except (HTTPError, URLError, TimeoutError, OSError, ValueError, KeyError, IndexError, TypeError) as exc:
         raise ModelUnavailable("Screen understanding failed. Verify that the configured model supports images and is available.") from exc
+
+
+async def stream_chat(messages: list[dict], model: str):
+    """Yield real OpenAI-compatible delta text; closing the iterator closes HTTP."""
+    base_url = os.environ.get("VISHU_LLM_BASE_URL", "http://127.0.0.1:11434/v1").rstrip("/")
+    api_key = os.environ.get("VISHU_LLM_API_KEY", "").strip()
+    payload = {
+        "model": model,
+        "messages": [{"role": "system", "content": SYSTEM_PROMPT}, *messages],
+        "stream": True,
+    }
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = "Bearer " + api_key
+    emitted = False
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(75.0, connect=5.0)) as client:
+            async with client.stream("POST", base_url + "/chat/completions", json=payload, headers=headers) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(data)
+                        text = event["choices"][0].get("delta", {}).get("content", "")
+                    except (ValueError, KeyError, IndexError, TypeError) as exc:
+                        raise ModelUnavailable("AI model returned an invalid streaming response.") from exc
+                    if text:
+                        emitted = True
+                        yield text
+    except httpx.HTTPStatusError as exc:
+        raise ModelUnavailable("AI model rejected the streaming request. Verify the configured model server and model.") from exc
+    except (httpx.HTTPError, TimeoutError, OSError) as exc:
+        raise ModelUnavailable("AI model streaming failed. Verify the configured local model server is running.") from exc
+    if not emitted:
+        raise ModelUnavailable("AI model returned no streamed text.")

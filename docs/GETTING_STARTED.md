@@ -1,4 +1,4 @@
-# VISHU Phase 1 — Local development
+# VISHU — Local development
 
 ## Prerequisites
 - Windows 10/11 for the first target desktop acceptance (Linux/macOS remain development targets).
@@ -41,11 +41,12 @@ The unsigned NSIS installer is written to `release/installers`. It includes a fr
 - Python API: python -m pip install -r backend/requirements-dev.txt, then python -m pytest
 - React typecheck and bundle: npm run build
 
-## Current limitations
+## Phase 2 capabilities and limits
 - A standalone Vite browser page intentionally cannot call the authenticated backend. Run through Electron.
-- Voice input uses offline Vosk and needs a separately downloaded model from the [official Vosk model list](https://alphacephei.com/vosk/models). Set `VISHU_VOSK_MODEL_PATH` to the extracted model folder before launching. Speech playback uses the operating system's available browser speech voice. Transcription and speech playback are turn-based; full duplex streaming and barge-in during model generation are not implemented.
+- Voice input uses offline Vosk and needs a separately downloaded model from the [official Vosk model list](https://alphacephei.com/vosk/models). Set `VISHU_VOSK_MODEL_PATH` to the extracted model folder before launching. Responses stream from the configured model. Stop response cancels generation and queued speech; interrupted turns are not saved. Speech uses the available Windows/browser system voice and is delivered in short text segments as they arrive.
 - Screen understanding uses the OS/browser screen chooser and sends the selected still image to the configured OpenAI-compatible model. The selected model must support image input; local text-only models return an explicit error. Screen images are not stored in conversation history.
 - Text file sharing is read-only and limited to user-selected `.txt`, `.md`, `.csv`, `.json`, and `.log` files under 100 KB. The contents are included in the user message and therefore saved in the local conversation history.
-- General Windows computer control, arbitrary shell execution, file modification, device connectivity and rich memory are not implemented.
+- The separate Open text file action accepts only the same small plain-text formats, asks for confirmation immediately before opening the chosen file in its default Windows application, and records consent and outcome in audit/actions.jsonl inside VISHU's user-data folder. The model cannot invoke this action.
+- General Windows computer control, arbitrary shell execution, file modification, device connectivity and rich memory are not implemented. Physical microphone and vision-model acceptance requires suitable hardware and a configured vision-capable model.
 - Windows installer packaging is supported by `npm run dist:win`; the current installer is unsigned. Install Ollama and a compatible model separately.
 - Backend availability does not guarantee an AI model is installed. Missing models produce an error instead of a simulated AI response.

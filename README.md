@@ -9,11 +9,11 @@
 - Expandable skills, connected devices, agents, auditability, and permission enforcement
 - Windows-first desktop experience, with web and mobile support designed as separate clients
 
-## Current milestone — Phase 2 (first vertical slice)
+## Current milestone — Phase 2 (implementation complete; Windows acceptance pending)
 
 The first vertical slice provides a secure local desktop shell, Python API, SQLite conversation history, and a real OpenAI-compatible local model connection (for example, Ollama). It must not fabricate assistant responses when no model is available.
 
-The first Phase 2 slice adds offline microphone transcription (Vosk), system speech playback, user-picked read-only text-file context, and user-selected screen capture sent to an image-capable configured model. These tools require explicit user actions. Later phases add streaming voice, richer permission management, memory, devices, and autonomous workflows.
+Phase 2 implements offline microphone transcription (Vosk), streamed model responses, incremental system speech playback with stop controls, user-picked read-only text-file context, and user-selected screen capture sent to an image-capable configured model. A separate Windows action can open a user-selected small text file only after a native consent prompt; each decision and result is recorded locally in the VISHU user-data folder. Model output cannot invoke shell commands or trigger OS actions. Packaged desktop acceptance still needs a physical microphone and screen chooser, and screen understanding needs a configured vision-capable model.
 
 ## Development
 
@@ -25,4 +25,4 @@ All VISHU code is authored independently. Brahma repositories were studied for a
 
 ### Security defaults
 
-No committed secrets. Backend bound to loopback. Desktop session token held outside renderer process. State-changing API requests require authorization. No arbitrary shell execution, self-modifying code, or remote device control in Phase 1.
+No committed secrets. Backend bound to loopback. Desktop session token held outside renderer process. State-changing API requests require authorization. No arbitrary shell execution, self-modifying code, or remote device control.

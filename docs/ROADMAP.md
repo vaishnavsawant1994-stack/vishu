@@ -13,13 +13,18 @@ This is an execution roadmap, not a claim that features are already working.
 - [x] Frontend build and desktop launch validated by CI and Windows smoke tests
 - [x] Installer and packaging (unsigned; model setup remains manual)
 
-## Phase 2 — Voice and computer (first slice implemented)
+## Phase 2 — Voice and computer (features implemented; device acceptance pending)
 - [x] Offline microphone transcription through Vosk with explicit missing-model errors
 - [x] System speech playback with stop control
 - [x] User-selected still-screen capture routed to a configured vision-capable model
 - [x] Native-dialog, read-only text-file sharing with extension and size limits
-- [ ] Streaming speech and interruption during model generation
-- [ ] Broader OS automation and constrained file operations with dedicated consent and audit trail
+- [x] Model response streaming with cancellation propagated to the model request
+- [x] Incremental system speech playback with stop and replay controls
+- [x] Constrained user-selected text-file opening with per-action consent and a local audit log
+- [ ] Packaged desktop acceptance with a physical microphone and configured offline speech model
+- [ ] Screen chooser and screen understanding acceptance with a configured vision-capable model
+
+Arbitrary shell commands, file modification, and model-initiated Windows actions remain out of scope. The one Windows action above can only open a user-selected small text file after native confirmation.
 
 ## Phase 3 — Memory and intelligence
 Inspectable second brain, citations, project knowledge, model routing, planning.

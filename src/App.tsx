@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { request, type ChatMessage, type ChatResponse, type Conversation, type Health } from "./api";
+import { request, type ChatMessage, type Conversation, type Health } from "./api";
 
 function shortDate(value: string): string {
   const time = Date.parse(value);
@@ -21,11 +21,16 @@ export default function App() {
   const [recording, setRecording] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [streamingAssistant, setStreamingAssistant] = useState("");
   const [attachment, setAttachment] = useState<{name: string; content: string} | null>(null);
   const [screenQuestion, setScreenQuestion] = useState("What is on my screen?");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const endOfMessages = useRef<HTMLDivElement>(null);
   const selectedRef = useRef<string | null>(null);
+  const activeStreamRef = useRef<string | null>(null);
+  const streamFailureRef = useRef("");
+  const completedConversationRef = useRef("");
+  const speechBufferRef = useRef("");
 
   useEffect(() => {
     (async () => {
@@ -44,7 +49,22 @@ export default function App() {
 
   useEffect(() => {
     endOfMessages.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, pending]);
+  }, [messages, pending, streamingAssistant]);
+
+  useEffect(() => {
+    const unsubscribe = window.vishu?.onChatStream((event) => {
+      if (event.streamId !== activeStreamRef.current) return;
+      if (event.type === "delta" && event.text) {
+        setStreamingAssistant((current) => current + event.text);
+        queueStreamSpeech(event.text);
+      } else if (event.type === "error") {
+        streamFailureRef.current = event.message || "The model stream failed.";
+      } else if (event.type === "done" && event.conversation_id) {
+        completedConversationRef.current = event.conversation_id;
+      }
+    });
+    return () => unsubscribe?.();
+  }, []);
 
   async function refresh() {
     setItems(await request<Conversation[]>("GET", "/api/conversations"));
@@ -85,30 +105,96 @@ export default function App() {
     setError("");
     setBusy(true);
     setPending(text);
+    setStreamingAssistant("");
+    streamFailureRef.current = "";
+    completedConversationRef.current = "";
+    speechBufferRef.current = "";
     setDraft("");
+    stopSpeech();
+    const streamId = crypto.randomUUID();
+    activeStreamRef.current = streamId;
     try {
-      const response = await request<ChatResponse>("POST", "/api/chat", {
+      const result = await window.vishu?.chatStream(streamId, {
         text: attachment
-          ? `${text}\n\n[User-selected file: ${attachment.name}]\n${attachment.content}\n[End of file]`
+          ? text + "\n\n[User-selected file: " + attachment.name + "]\n" + attachment.content + "\n[End of file]"
           : text,
         conversation_id: selected
       });
-      selectedRef.current = response.conversation_id;
-      setSelected(response.conversation_id);
+      if (result?.cancelled) return;
+      if (streamFailureRef.current) throw new Error(streamFailureRef.current);
+      if (!result?.complete || !completedConversationRef.current) {
+        throw new Error("VISHU ended the response stream before completion.");
+      }
+      finishStreamSpeech();
+      selectedRef.current = completedConversationRef.current;
+      setSelected(completedConversationRef.current);
       const next = await request<ChatMessage[]>(
-        "GET", "/api/conversations/" + response.conversation_id + "/messages"
+        "GET", "/api/conversations/" + completedConversationRef.current + "/messages"
       );
       setMessages(next);
       setAttachment(null);
-      playSpeech(response.assistant);
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The model request failed.");
-      setDraft(text);
+      if (activeStreamRef.current === streamId) {
+        setError(cause instanceof Error ? cause.message : "The model request failed.");
+        setDraft(text);
+      }
     } finally {
-      setPending(null);
-      setBusy(false);
+      if (activeStreamRef.current === streamId) {
+        activeStreamRef.current = null;
+        setPending(null);
+        setStreamingAssistant("");
+        setBusy(false);
+      }
     }
+  }
+
+  function queueStreamSpeech(text: string) {
+    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return;
+    speechBufferRef.current += text;
+    const boundary = Math.max(
+      speechBufferRef.current.lastIndexOf(". "),
+      speechBufferRef.current.lastIndexOf("? "),
+      speechBufferRef.current.lastIndexOf("! "),
+      speechBufferRef.current.lastIndexOf("\n")
+    );
+    const cut = boundary >= 0 ? boundary + 1 : speechBufferRef.current.length >= 220
+      ? speechBufferRef.current.lastIndexOf(" ", 200) : -1;
+    if (cut <= 0) return;
+    const part = speechBufferRef.current.slice(0, cut).trim();
+    speechBufferRef.current = speechBufferRef.current.slice(cut).trimStart();
+    if (part) enqueueSpeech(part);
+  }
+
+  function enqueueSpeech(text: string) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.onstart = () => setSpeaking(true);
+    utterance.onend = () => setSpeaking(window.speechSynthesis.speaking);
+    utterance.onerror = () => {
+      setSpeaking(false);
+      setError("System speech playback failed or no speech voice is available.");
+    };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function finishStreamSpeech() {
+    const remainder = speechBufferRef.current.trim();
+    speechBufferRef.current = "";
+    if (remainder && "speechSynthesis" in window) enqueueSpeech(remainder);
+  }
+
+  function stopResponse() {
+    const streamId = activeStreamRef.current;
+    if (!streamId) return;
+    activeStreamRef.current = null;
+    window.vishu?.cancelStream(streamId);
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    speechBufferRef.current = "";
+    setSpeaking(false);
+    setPending(null);
+    setStreamingAssistant("");
+    setBusy(false);
+    setError("Response stopped. The incomplete turn was not saved.");
   }
 
   async function chooseFile() {
@@ -121,8 +207,17 @@ export default function App() {
   }
 
   function stopSpeech() {
-    window.speechSynthesis.cancel();
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     setSpeaking(false);
+  }
+
+  async function openSelectedText() {
+    try {
+      const result = await window.vishu?.openSelectedText();
+      if (result?.opened) setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Windows could not open that file.");
+    }
   }
 
   function playSpeech(text: string) {
@@ -334,6 +429,15 @@ export default function App() {
                   </div>
                 </div>
               )}
+              {streamingAssistant && (
+                <div className="message-row assistant">
+                  <div className="message-avatar">V</div>
+                  <div className="message-content">
+                    <div className="message-name">VISHU · Responding</div>
+                    <div className="message-text">{streamingAssistant}</div>
+                  </div>
+                </div>
+              )}
               <div ref={endOfMessages} />
             </div>
           )}
@@ -367,13 +471,15 @@ export default function App() {
               {recording ? "Stop recording" : voiceBusy ? "Transcribing…" : "🎙 Voice input"}
             </button>
             <button type="button" onClick={() => void chooseFile()} disabled={busy}>Attach text file</button>
+            <button type="button" onClick={() => void openSelectedText()} disabled={busy}>Open text file…</button>
             <input aria-label="Question about screen" value={screenQuestion} onChange={(event) => setScreenQuestion(event.target.value)} maxLength={500} />
             <button type="button" onClick={() => void understandScreen()} disabled={busy}>Share screen…</button>
-            {speaking && <button type="button" onClick={stopSpeech}>Stop speaking</button>}
+            {busy && <button type="button" onClick={stopResponse}>Stop response</button>}
+            {speaking && !busy && <button type="button" onClick={stopSpeech}>Stop speaking</button>}
           </div>
           {attachment && <div className="attachment-note">Selected: {attachment.name} <button type="button" onClick={() => setAttachment(null)}>Remove</button></div>}
           <p className="composer-caption">
-            {busy ? "Waiting for the configured AI model..." :
+            {busy ? "Streaming from the configured AI model… Stop response cancels generation and speech." :
               "VISHU does not invent AI responses. Enter to send · Shift+Enter for a new line"}
           </p>
         </div>

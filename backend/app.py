@@ -15,8 +15,9 @@ from typing import Callable
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
+from starlette.responses import StreamingResponse
 
-from llm import ModelUnavailable, complete_chat, complete_vision
+from llm import ModelUnavailable, complete_chat, complete_vision, stream_chat
 from store import ConversationStore
 
 
@@ -49,6 +50,7 @@ def create_app(
     database_path: str | Path | None = None,
     token: str | None = None,
     provider: Callable[[list[dict], str], str] | None = None,
+    stream_provider=None,
 ) -> FastAPI:
     session_token = token if token is not None else os.environ.get("VISHU_API_TOKEN", "")
     if not session_token:
@@ -59,6 +61,7 @@ def create_app(
     store = ConversationStore(db)
     model_name = os.environ.get("VISHU_MODEL", "qwen2.5:3b")
     complete = provider if provider is not None else complete_chat
+    stream = stream_provider if stream_provider is not None else stream_chat
     vosk_model_path = os.environ.get("VISHU_VOSK_MODEL_PATH", "").strip()
     chat_lock = threading.Lock()
 
@@ -177,6 +180,65 @@ def create_app(
                 "assistant": assistant.strip(),
                 "model": model_name,
             }
+
+    @app.post("/api/chat/stream", dependencies=[Depends(authorize)])
+    def chat_stream(payload: ChatRequest):
+        text = payload.text.strip()
+        if not text:
+            raise HTTPException(status_code=422, detail="Message cannot be empty.")
+        if not chat_lock.acquire(blocking=False):
+            raise HTTPException(status_code=409, detail="VISHU is already processing a request.")
+        try:
+            if payload.conversation_id:
+                if not store.get_conversation(payload.conversation_id):
+                    raise HTTPException(status_code=404, detail="Conversation not found.")
+                history = store.model_history(payload.conversation_id)
+                conversation_id = payload.conversation_id
+            else:
+                history = []
+                conversation_id = None
+        except Exception:
+            chat_lock.release()
+            raise
+
+        async def events():
+            chunks: list[str] = []
+            try:
+                async for chunk in stream([*history, {"role": "user", "content": text}], model_name):
+                    if not isinstance(chunk, str):
+                        raise ModelUnavailable("AI model returned an invalid streaming response.")
+                    chunks.append(chunk)
+                    yield "data: " + json.dumps({"type": "delta", "text": chunk}, ensure_ascii=False) + "\n\n"
+            except ModelUnavailable as exc:
+                yield "data: " + json.dumps({"type": "error", "message": str(exc)}) + "\n\n"
+                return
+            except Exception:
+                yield "data: " + json.dumps({"type": "error", "message": "AI model streaming failed."}) + "\n\n"
+                return
+            answer = "".join(chunks).strip()
+            if not answer:
+                yield "data: " + json.dumps({"type": "error", "message": "Model returned no text."}) + "\n\n"
+                return
+            actual_conversation_id = conversation_id
+            if actual_conversation_id is None:
+                actual_conversation_id = store.create_conversation(text[:60])["id"]
+            store.append_exchange(actual_conversation_id, text, answer)
+            yield "data: " + json.dumps({
+                "type": "done", "conversation_id": actual_conversation_id, "model": model_name
+            }) + "\n\n"
+
+        async def managed_events():
+            try:
+                async for event in events():
+                    yield event
+            finally:
+                chat_lock.release()
+
+        return StreamingResponse(
+            managed_events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return app
 

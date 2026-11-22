@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 import base64
 import io
+import json
 import sys
 import types
 import wave
@@ -46,6 +47,7 @@ def test_authentication_required(client):
     assert api.get("/api/conversations").status_code == 401
     assert api.get("/api/conversations", headers={"Authorization": "Bearer wrong"}).status_code == 401
     assert api.post("/api/chat", json={"text": "hello"}).status_code == 401
+    assert api.post("/api/chat/stream", json={"text": "hello"}).status_code == 401
 
 
 def test_conversation_round_trip_and_context(client):
@@ -116,6 +118,65 @@ def test_empty_model_response_rejected(tmp_path):
     )
     result = api.post("/api/chat", json={"text": "Hi"}, headers={"Authorization": "Bearer t"})
     assert result.status_code == 502
+
+
+def test_streamed_chat_emits_tokens_and_persists_only_complete_turn(tmp_path):
+    async def streamed(_messages, _model):
+        yield "Hello "
+        yield "from a live stream."
+
+    api = TestClient(create_app(
+        database_path=tmp_path / "stream.db",
+        token="stream-token",
+        provider=lambda _messages, _model: "Synchronous follow-up.",
+        stream_provider=streamed,
+    ))
+    response = api.post("/api/chat/stream", json={"text": "Say hello"}, headers={
+        "Authorization": "Bearer stream-token",
+    })
+    assert response.status_code == 200
+    events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+    assert [event["text"] for event in events if event["type"] == "delta"] == ["Hello ", "from a live stream."]
+    conversation_id = events[-1]["conversation_id"]
+    messages = api.get(
+        "/api/conversations/" + conversation_id + "/messages",
+        headers={"Authorization": "Bearer stream-token"},
+    ).json()
+    assert [(message["role"], message["content"]) for message in messages] == [
+        ("user", "Say hello"),
+        ("assistant", "Hello from a live stream."),
+    ]
+    follow_up = api.post(
+        "/api/chat",
+        json={"text": "Are you ready?", "conversation_id": conversation_id},
+        headers={"Authorization": "Bearer stream-token"},
+    )
+    assert follow_up.status_code == 200
+
+
+def test_stream_failure_does_not_create_conversation_or_fabricate_reply(tmp_path):
+    async def unavailable(_messages, _model):
+        raise ModelUnavailable("Model offline.")
+        yield "unreachable"
+
+    api = TestClient(create_app(
+        database_path=tmp_path / "stream-failure.db",
+        token="stream-token",
+        provider=lambda _messages, _model: "Synchronous response.",
+        stream_provider=unavailable,
+    ))
+    response = api.post("/api/chat/stream", json={"text": "Say hello"}, headers={
+        "Authorization": "Bearer stream-token",
+    })
+    assert response.status_code == 200
+    events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+    assert events == [{"type": "error", "message": "Model offline."}]
+    assert api.get("/api/conversations", headers={
+        "Authorization": "Bearer stream-token",
+    }).json() == []
+    assert api.post("/api/chat", json={"text": "I can retry"}, headers={
+        "Authorization": "Bearer stream-token",
+    }).status_code == 200
 
 
 def test_transcription_requires_model_configuration(client):
