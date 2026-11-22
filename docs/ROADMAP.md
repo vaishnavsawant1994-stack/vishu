@@ -24,6 +24,8 @@ This is an execution roadmap, not a claim that features are already working.
 - [ ] Packaged desktop acceptance with a physical microphone and configured offline speech model
 - [ ] Packaged screen preview, source selection, and understanding acceptance with a configured vision-capable model
 
+Windows development-desktop checks on 2026-11-22 confirmed local screen capture and a real response from `qwen2.5vl:3b`. The offline Vosk API transcribed a known local WAV phrase. Microphone permission and recording start/stop worked, but live recording produced no recognized speech, so physical microphone acceptance remains open. The packaged installer built in CI; running the packaged app on Windows remains unverified.
+
 Arbitrary shell commands, file modification, and model-initiated Windows actions remain out of scope. The one Windows action above can only open a user-selected small text file after native confirmation.
 
 ## Phase 3 — Memory and intelligence
