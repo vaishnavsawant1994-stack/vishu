@@ -2,19 +2,24 @@
 
 This is an execution roadmap, not a claim that features are already working.
 
-## Phase 1 — Desktop and AI foundation (in progress)
+## Phase 1 — Desktop and AI foundation (accepted)
 - [x] Repository initialization and independent architecture decision
 - [x] Loopback-only desktop backend with session authorization
 - [x] Real model request integration via OpenAI-compatible API
 - [x] SQLite conversations and chat history
 - [x] Electron/React desktop interface with chat functionality
 - [x] Automated backend/API tests and CI configuration
-- [ ] Real Windows desktop acceptance with Ollama installed
-- [ ] Frontend build and desktop launch validated by CI and Windows smoke tests
-- [ ] Installer, secure first-launch model setup, and packaging
+- [x] Real Windows desktop acceptance with Ollama installed
+- [x] Frontend build and desktop launch validated by CI and Windows smoke tests
+- [x] Installer and packaging (unsigned; model setup remains manual)
 
-## Phase 2 — Voice and computer
-Streaming speech, interruptibility, screen understanding, gated desktop/file tools.
+## Phase 2 — Voice and computer (first slice implemented)
+- [x] Offline microphone transcription through Vosk with explicit missing-model errors
+- [x] System speech playback with stop control
+- [x] User-selected still-screen capture routed to a configured vision-capable model
+- [x] Native-dialog, read-only text-file sharing with extension and size limits
+- [ ] Streaming speech and interruption during model generation
+- [ ] Broader OS automation and constrained file operations with dedicated consent and audit trail
 
 ## Phase 3 — Memory and intelligence
 Inspectable second brain, citations, project knowledge, model routing, planning.

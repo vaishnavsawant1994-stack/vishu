@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import pytest
+import base64
+import io
+import sys
+import types
+import wave
 from fastapi.testclient import TestClient
 
 from app import create_app
 from llm import ModelUnavailable
+import app as app_module
 
 
 @pytest.fixture
@@ -110,3 +116,64 @@ def test_empty_model_response_rejected(tmp_path):
     )
     result = api.post("/api/chat", json={"text": "Hi"}, headers={"Authorization": "Bearer t"})
     assert result.status_code == 502
+
+
+def test_transcription_requires_model_configuration(client):
+    api, _ = client
+    response = api.post("/api/transcribe", json={"audio_wav_base64": "UklGRg=="}, headers=headers())
+    assert response.status_code == 503
+    assert "VISHU_VOSK_MODEL_PATH" in response.json()["detail"]
+
+
+def test_transcription_validates_and_returns_recognized_text(monkeypatch, tmp_path):
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    monkeypatch.setenv("VISHU_VOSK_MODEL_PATH", str(model_dir))
+
+    class Recognizer:
+        def __init__(self, *_args): pass
+        def SetWords(self, _enabled): pass
+        def AcceptWaveform(self, _chunk): pass
+        def FinalResult(self): return '{"text":"hello vishu"}'
+
+    monkeypatch.setitem(sys.modules, "vosk", types.SimpleNamespace(KaldiRecognizer=Recognizer, Model=lambda _path: object()))
+    stream = io.BytesIO()
+    with wave.open(stream, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(b"\0\0" * 160)
+    audio = base64.b64encode(stream.getvalue()).decode("ascii")
+    with TestClient(create_app(database_path=tmp_path / "voice.db", token="test-token")) as api:
+        response = api.post("/api/transcribe", json={"audio_wav_base64": audio}, headers=headers())
+        assert response.status_code == 200
+        assert response.json() == {"text": "hello vishu"}
+        assert api.post("/api/transcribe", json={"audio_wav_base64": "YmFk"}, headers=headers()).status_code == 422
+
+
+def test_screen_capture_requires_auth(client):
+    api, _ = client
+    result = api.post("/api/screen", json={"image_data_url": "data:image/png;base64,AA=="})
+    assert result.status_code == 401
+
+
+def test_screen_capture_validates_png_and_uses_real_vision(monkeypatch, client):
+    api, _ = client
+    calls = []
+    monkeypatch.setattr(app_module, "complete_vision", lambda question, image, model: calls.append((question, image, model)) or "A real vision result")
+    png = "data:image/png;base64," + "iVBORw0KGgo="
+    result = api.post("/api/screen", json={"image_data_url": png, "question": "Read the heading"}, headers=headers())
+    assert result.status_code == 200
+    assert result.json()["answer"] == "A real vision result"
+    assert calls[0][0] == "Read the heading"
+    assert api.post("/api/screen", json={"image_data_url": "data:image/png;base64,AA=="}, headers=headers()).status_code == 422
+
+
+def test_screen_vision_failure_is_reported(monkeypatch, client):
+    api, _ = client
+    def fail(*_args):
+        raise ModelUnavailable("Vision not supported.")
+    monkeypatch.setattr(app_module, "complete_vision", fail)
+    result = api.post("/api/screen", json={"image_data_url": "data:image/png;base64,iVBORw0KGgo="}, headers=headers())
+    assert result.status_code == 503
+    assert result.json()["detail"] == "Vision not supported."

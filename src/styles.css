@@ -82,6 +82,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .message-row.user .message-name { color: #bbd2ec; }
 .message-text { font-size: 14px; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; color: #e0e9f6; }
 .message-row.user .message-text { color: #cbd9eb; }
+.speak-message { border: 0; background: transparent; color: #77c8ec; padding: 8px 0 0; font-size: 11px; }
 .message-row.pending { opacity: .7; }
 .composer-wrap { flex-shrink: 0; padding: 12px 26px 14px; max-width: 940px; width: 100%; margin: 0 auto; }
 .composer { background: #101f35e8; border: 1px solid #396381; border-radius: 17px; display: flex;
@@ -93,6 +94,13 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .send-button { height: 37px; width: 37px; flex: 0 0 37px; border-radius: 11px; border: 0;
   background: linear-gradient(145deg, #40cfff, #177bbd); color: #04182a; font-size: 24px; font-weight: 800; }
 .composer-caption { text-align: center; color: #71849d; font-size: 10px; line-height: 1.5; margin: 10px 0 0; }
+.tools-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
+.tools-row button, .attachment-note button { border: 1px solid #34506d; border-radius: 9px; padding: 8px 10px;
+  background: #10243a; color: #b9d5ea; font-size: 11px; }
+.tools-row button:hover { border-color: #4eb8e4; color: #e6f8ff; }
+.tools-row input { width: min(220px, 100%); border: 1px solid #34506d; border-radius: 9px;
+  padding: 8px 10px; background: #0c1b2d; color: #dbeafa; font-size: 11px; }
+.attachment-note { text-align: center; color: #9bd9f2; font-size: 11px; margin-top: 8px; }
 .error-message { display: flex; gap: 10px; justify-content: space-between; align-items: center;
   border: 1px solid #924f65; background: #3e1c2c; color: #ffc4d3; border-radius: 11px;
   padding: 10px 13px; font-size: 12px; margin-bottom: 10px; }

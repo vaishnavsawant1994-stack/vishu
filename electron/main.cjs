@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, desktopCapturer } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const net = require("node:net");
@@ -31,7 +31,8 @@ function isAllowedRequest(method, route) {
       /^\/api\/conversations\/[a-f0-9-]{36}\/messages$/.test(route);
   }
   if (method === "POST") {
-    return route === "/api/chat" || route === "/api/conversations";
+    return route === "/api/chat" || route === "/api/conversations" ||
+      route === "/api/transcribe" || route === "/api/screen";
   }
   if (method === "DELETE") {
     return /^\/api\/conversations\/[a-f0-9-]{36}$/.test(route);
@@ -130,6 +131,22 @@ ipcMain.handle("vishu:api", async (_event, input) => {
   return payload;
 });
 
+ipcMain.handle("vishu:open-text-file", async (event) => {
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const choice = await dialog.showOpenDialog(owner, {
+    title: "Choose a text file to share with VISHU",
+    properties: ["openFile"],
+    filters: [{ name: "Text and data files", extensions: ["txt", "md", "csv", "json", "log"] }]
+  });
+  if (choice.canceled || choice.filePaths.length !== 1) return null;
+  const filePath = choice.filePaths[0];
+  if (!/\.(txt|md|csv|json|log)$/i.test(filePath)) throw new Error("That file type is not supported.");
+  const stat = fs.statSync(filePath);
+  if (!stat.isFile() || stat.size > 100_000) throw new Error("Choose a text file smaller than 100 KB.");
+  const content = fs.readFileSync(filePath, "utf8");
+  return { name: path.basename(filePath), content };
+});
+
 function createWindow() {
   const window = new BrowserWindow({
     width: 1280,
@@ -149,6 +166,35 @@ function createWindow() {
   });
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.session.setPermissionRequestHandler(async (_webContents, permission, callback) => {
+    if (permission !== "media") return callback(false);
+    const answer = await dialog.showMessageBox(window, {
+      type: "question",
+      buttons: ["Allow microphone", "Deny"],
+      defaultId: 1,
+      cancelId: 1,
+      title: "Microphone access",
+      message: "Allow VISHU to use your microphone for this recording?"
+    });
+    callback(answer.response === 0);
+  });
+  window.webContents.session.setDisplayMediaRequestHandler(async (_request, callback) => {
+    try {
+      const sources = await desktopCapturer.getSources({ types: ["screen", "window"] });
+      const answer = await dialog.showMessageBox(window, {
+        type: "question",
+        buttons: [...sources.map((source) => source.name), "Cancel"],
+        defaultId: sources.length,
+        cancelId: sources.length,
+        title: "Choose what VISHU may view",
+        message: "Choose one screen or window. VISHU captures one still image and sends it to your configured model for this request only."
+      });
+      const source = sources[answer.response];
+      callback(source ? { video: source } : {});
+    } catch (_error) {
+      callback({});
+    }
+  });
   const devUrl = "http://127.0.0.1:5173";
   window.webContents.on("will-navigate", (event, target) => {
     if (!app.isPackaged && target.startsWith(devUrl + "/")) return;

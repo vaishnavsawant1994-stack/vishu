@@ -9,11 +9,11 @@
 - Expandable skills, connected devices, agents, auditability, and permission enforcement
 - Windows-first desktop experience, with web and mobile support designed as separate clients
 
-## Current milestone — Phase 1
+## Current milestone — Phase 2 (first vertical slice)
 
 The first vertical slice provides a secure local desktop shell, Python API, SQLite conversation history, and a real OpenAI-compatible local model connection (for example, Ollama). It must not fabricate assistant responses when no model is available.
 
-Later phases add audio, tools, memory, devices, and autonomous workflows only behind explicit permission boundaries.
+The first Phase 2 slice adds offline microphone transcription (Vosk), system speech playback, user-picked read-only text-file context, and user-selected screen capture sent to an image-capable configured model. These tools require explicit user actions. Later phases add streaming voice, richer permission management, memory, devices, and autonomous workflows.
 
 ## Development
 

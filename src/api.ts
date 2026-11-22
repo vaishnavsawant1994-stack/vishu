@@ -30,6 +30,7 @@ declare global {
   interface Window {
     vishu?: {
       request: (method: ApiMethod, path: string, body?: unknown) => Promise<unknown>;
+      openTextFile: () => Promise<{name: string; content: string} | null>;
     };
   }
 }

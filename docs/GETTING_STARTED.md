@@ -23,6 +23,7 @@ VISHU launches a local FastAPI service on a dynamically chosen loopback port. It
 - VISHU_MODEL: model ID, default qwen2.5:3b.
 - VISHU_LLM_BASE_URL: OpenAI-compatible API URL, default http://127.0.0.1:11434/v1.
 - VISHU_LLM_API_KEY: optional API credential, only in the backend environment.
+- VISHU_VOSK_MODEL_PATH: optional path to an extracted offline Vosk speech model. Without it, microphone transcription reports that it is unavailable.
 
 Environment variables must be set in the terminal before running the app. Never put a provider secret in a VITE_ variable.
 
@@ -42,6 +43,9 @@ The unsigned NSIS installer is written to `release/installers`. It includes a fr
 
 ## Current limitations
 - A standalone Vite browser page intentionally cannot call the authenticated backend. Run through Electron.
-- Voice, device connectivity, permissions-brokered tools and rich memory are not implemented yet.
+- Voice input uses offline Vosk and needs a separately downloaded model from the [official Vosk model list](https://alphacephei.com/vosk/models). Set `VISHU_VOSK_MODEL_PATH` to the extracted model folder before launching. Speech playback uses the operating system's available browser speech voice. Transcription and speech playback are turn-based; full duplex streaming and barge-in during model generation are not implemented.
+- Screen understanding uses the OS/browser screen chooser and sends the selected still image to the configured OpenAI-compatible model. The selected model must support image input; local text-only models return an explicit error. Screen images are not stored in conversation history.
+- Text file sharing is read-only and limited to user-selected `.txt`, `.md`, `.csv`, `.json`, and `.log` files under 100 KB. The contents are included in the user message and therefore saved in the local conversation history.
+- General Windows computer control, arbitrary shell execution, file modification, device connectivity and rich memory are not implemented.
 - Windows installer packaging is supported by `npm run dist:win`; the current installer is unsigned. Install Ollama and a compatible model separately.
 - Backend availability does not guarantee an AI model is installed. Missing models produce an error instead of a simulated AI response.

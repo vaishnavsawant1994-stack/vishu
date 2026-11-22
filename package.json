@@ -11,7 +11,7 @@
     "dev:desktop": "wait-on http://127.0.0.1:5173 && electron .",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "package:backend": "python -m PyInstaller --noconfirm --clean --onefile --name VISHUBackend --paths backend --distpath release/backend --workpath release/pyinstaller/work --specpath release/pyinstaller backend/entrypoint.py",
+    "package:backend": "python -m PyInstaller --noconfirm --clean --onefile --collect-all vosk --name VISHUBackend --paths backend --distpath release/backend --workpath release/pyinstaller/work --specpath release/pyinstaller backend/entrypoint.py",
     "dist:win": "npm run build && npm run package:backend && electron-builder --win nsis --publish never"
   },
   "dependencies": {

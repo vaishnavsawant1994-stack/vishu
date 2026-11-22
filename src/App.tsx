@@ -18,6 +18,12 @@ export default function App() {
   const [online, setOnline] = useState(false);
   const [model, setModel] = useState("Not configured");
   const [error, setError] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [attachment, setAttachment] = useState<{name: string; content: string} | null>(null);
+  const [screenQuestion, setScreenQuestion] = useState("What is on my screen?");
+  const recorderRef = useRef<MediaRecorder | null>(null);
   const endOfMessages = useRef<HTMLDivElement>(null);
   const selectedRef = useRef<string | null>(null);
 
@@ -82,7 +88,9 @@ export default function App() {
     setDraft("");
     try {
       const response = await request<ChatResponse>("POST", "/api/chat", {
-        text,
+        text: attachment
+          ? `${text}\n\n[User-selected file: ${attachment.name}]\n${attachment.content}\n[End of file]`
+          : text,
         conversation_id: selected
       });
       selectedRef.current = response.conversation_id;
@@ -91,6 +99,8 @@ export default function App() {
         "GET", "/api/conversations/" + response.conversation_id + "/messages"
       );
       setMessages(next);
+      setAttachment(null);
+      playSpeech(response.assistant);
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The model request failed.");
@@ -99,6 +109,127 @@ export default function App() {
       setPending(null);
       setBusy(false);
     }
+  }
+
+  async function chooseFile() {
+    try {
+      const selectedFile = await window.vishu?.openTextFile();
+      if (selectedFile) setAttachment(selectedFile);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not read that file.");
+    }
+  }
+
+  function stopSpeech() {
+    window.speechSynthesis.cancel();
+    setSpeaking(false);
+  }
+
+  function playSpeech(text: string) {
+    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+      setError("System speech playback is unavailable in this environment.");
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.onstart = () => setSpeaking(true);
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => {
+      setSpeaking(false);
+      setError("System speech playback failed or no speech voice is available.");
+    };
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function wavBase64(buffer: AudioBuffer): string {
+    const samples = buffer.getChannelData(0);
+    const bytes = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(bytes);
+    const write = (offset: number, value: string) => {
+      for (let index = 0; index < value.length; index += 1) view.setUint8(offset + index, value.charCodeAt(index));
+    };
+    write(0, "RIFF"); view.setUint32(4, 36 + samples.length * 2, true); write(8, "WAVE");
+    write(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true); view.setUint32(24, buffer.sampleRate, true);
+    view.setUint32(28, buffer.sampleRate * 2, true); view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true); write(36, "data"); view.setUint32(40, samples.length * 2, true);
+    for (let index = 0; index < samples.length; index += 1) {
+      const sample = Math.max(-1, Math.min(1, samples[index]));
+      view.setInt16(44 + index * 2, sample < 0 ? sample * 32768 : sample * 32767, true);
+    }
+    let binary = "";
+    const data = new Uint8Array(bytes);
+    for (let offset = 0; offset < data.length; offset += 0x8000) {
+      binary += String.fromCharCode(...data.subarray(offset, offset + 0x8000));
+    }
+    return btoa(binary);
+  }
+
+  async function recordAndTranscribe() {
+    if (recording && recorderRef.current) {
+      recorderRef.current.stop();
+      setRecording(false);
+      return;
+    }
+    setError("");
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const chunks: BlobPart[] = [];
+      const recorder = new MediaRecorder(stream);
+      recorderRef.current = recorder;
+      let recordingTimer = 0;
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.onstop = async () => {
+        window.clearTimeout(recordingTimer);
+        stream?.getTracks().forEach((track) => track.stop());
+        setRecording(false);
+        setVoiceBusy(true);
+        try {
+          const audioContext = new AudioContext();
+          const source = await audioContext.decodeAudioData(await new Blob(chunks).arrayBuffer());
+          await audioContext.close();
+          const context = new OfflineAudioContext(1, Math.ceil(source.duration * 16000), 16000);
+          const node = context.createBufferSource();
+          node.buffer = source;
+          node.connect(context.destination);
+          node.start();
+          const mono = await context.startRendering();
+          const result = await request<{text: string}>("POST", "/api/transcribe", {audio_wav_base64: wavBase64(mono)});
+          setDraft((current) => current ? `${current} ${result.text}` : result.text);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Offline speech recognition failed.");
+        } finally { setVoiceBusy(false); }
+      };
+      recorder.start();
+      recordingTimer = window.setTimeout(() => recorder.stop(), 60_000);
+      setRecording(true);
+    } catch (cause) {
+      stream?.getTracks().forEach((track) => track.stop());
+      setError(cause instanceof Error ? cause.message : "Microphone access was denied.");
+    }
+  }
+
+  async function understandScreen() {
+    setError("");
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: false});
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      await video.play();
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.min(video.videoWidth, 1600);
+      canvas.height = Math.round(video.videoHeight * canvas.width / video.videoWidth);
+      canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      stream.getTracks().forEach((track) => track.stop());
+      stream = null;
+      const image_data_url = canvas.toDataURL("image/png");
+      const result = await request<{answer: string}>("POST", "/api/screen", {image_data_url, question: screenQuestion});
+      setMessages((current) => [...current, {id: crypto.randomUUID(), role: "assistant", content: result.answer, created_at: new Date().toISOString()}]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Screen capture or image understanding failed.");
+    } finally { stream?.getTracks().forEach((track) => track.stop()); }
   }
 
   function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -167,7 +298,7 @@ export default function App() {
             <span className="eyebrow">WORKSPACE / CHAT</span>
             <strong>{selectedTitle}</strong>
           </div>
-          <div className="topbar-chip"><span className="chip-dot" /> PHASE 1 · LOCAL</div>
+          <div className="topbar-chip"><span className="chip-dot" /> PHASE 2 · LOCAL</div>
         </header>
 
         <div className="conversation-area" aria-live="polite">
@@ -178,8 +309,8 @@ export default function App() {
               <h1>Meet VISHU.</h1>
               <p>A dedicated AI workspace built for real work, meaningful context, and your control.</p>
               <div className="welcome-note">
-                This first version connects to a real local AI model. Start Ollama and install
-                your configured model before chatting. Voice and device actions come in later phases.
+                VISHU connects to your configured model. Microphone transcription runs with an
+                installed offline Vosk model; screen viewing and text-file sharing always require your action.
               </div>
             </section>
           ) : (
@@ -190,6 +321,7 @@ export default function App() {
                   <div className="message-content">
                     <div className="message-name">{message.role === "user" ? "You" : "VISHU"}</div>
                     <div className="message-text">{message.content}</div>
+                    {message.role === "assistant" && <button className="speak-message" type="button" onClick={() => playSpeech(message.content)}>Play voice</button>}
                   </div>
                 </div>
               ))}
@@ -230,6 +362,16 @@ export default function App() {
               {busy ? "···" : "↑"}
             </button>
           </form>
+          <div className="tools-row" aria-label="Voice and computer tools">
+            <button type="button" onClick={() => void recordAndTranscribe()} disabled={voiceBusy || busy}>
+              {recording ? "Stop recording" : voiceBusy ? "Transcribing…" : "🎙 Voice input"}
+            </button>
+            <button type="button" onClick={() => void chooseFile()} disabled={busy}>Attach text file</button>
+            <input aria-label="Question about screen" value={screenQuestion} onChange={(event) => setScreenQuestion(event.target.value)} maxLength={500} />
+            <button type="button" onClick={() => void understandScreen()} disabled={busy}>Share screen…</button>
+            {speaking && <button type="button" onClick={stopSpeech}>Stop speaking</button>}
+          </div>
+          {attachment && <div className="attachment-note">Selected: {attachment.name} <button type="button" onClick={() => setAttachment(null)}>Remove</button></div>}
           <p className="composer-caption">
             {busy ? "Waiting for the configured AI model..." :
               "VISHU does not invent AI responses. Enter to send · Shift+Enter for a new line"}
