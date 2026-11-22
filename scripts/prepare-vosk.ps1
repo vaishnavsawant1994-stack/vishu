@@ -25,7 +25,7 @@ if ($actualSha256 -ne $expectedSha256) {
 
 if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
 New-Item -ItemType Directory -Path $staging | Out-Null
-Expand-Archive -LiteralPath $archive -DestinationPath $staging -Force
+Expand-Archive -LiteralPath $archive -DestinationPath $staging
 $modelFolder = Join-Path $staging "vosk-model-small-en-in-0.4"
 if (-not (Test-Path -LiteralPath (Join-Path $modelFolder "am") -PathType Container) -or
     -not (Test-Path -LiteralPath (Join-Path $modelFolder "conf") -PathType Container)) {

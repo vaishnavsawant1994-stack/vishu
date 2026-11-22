@@ -31,7 +31,8 @@ test("action audit stores append-only local JSON records", () => {
 });
 
 test("packaged builds find bundled offline speech model while development stays explicit", () => {
-  assert.equal(resolveVoskModelPath({ env: {}, packaged: true, resourcesPath: "C:\\app\\resources" }), "C:\\app\\resources\\vosk-model");
-  assert.equal(resolveVoskModelPath({ env: {}, packaged: false, resourcesPath: "C:\\app\\resources" }), "");
+  const resourcesPath = path.join("app", "resources");
+  assert.equal(resolveVoskModelPath({ env: {}, packaged: true, resourcesPath }), path.join(resourcesPath, "vosk-model"));
+  assert.equal(resolveVoskModelPath({ env: {}, packaged: false, resourcesPath }), "");
   assert.equal(resolveVoskModelPath({ env: { VISHU_VOSK_MODEL_PATH: "  D:\\models\\vosk  " }, packaged: true, resourcesPath: "C:\\app\\resources" }), "D:\\models\\vosk");
 });
