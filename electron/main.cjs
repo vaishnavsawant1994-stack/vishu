@@ -62,16 +62,13 @@ async function waitUntilHealthy() {
 
 async function startBackend() {
   backendPort = await obtainPort();
-  const python = process.env.VISHU_PYTHON ||
-    (process.platform === "win32" ? "python" : "python3");
   const backendDir = path.resolve(__dirname, "..", "backend");
   const dataDir = app.getPath("userData");
   fs.mkdirSync(dataDir, { recursive: true });
-  backend = spawn(
-    python,
-    ["-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", String(backendPort)],
-    {
-      cwd: backendDir,
+  if (app.isPackaged) {
+    const executable = path.join(process.resourcesPath, "backend", "VISHUBackend.exe");
+    backend = spawn(executable, ["--port", String(backendPort)], {
+      cwd: dataDir,
       env: {
         ...process.env,
         VISHU_API_TOKEN: sessionToken,
@@ -79,8 +76,25 @@ async function startBackend() {
       },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true
-    }
-  );
+    });
+  } else {
+    const python = process.env.VISHU_PYTHON ||
+      (process.platform === "win32" ? "python" : "python3");
+    backend = spawn(
+      python,
+      ["-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", String(backendPort)],
+      {
+        cwd: backendDir,
+        env: {
+          ...process.env,
+          VISHU_API_TOKEN: sessionToken,
+          VISHU_DB_PATH: path.join(dataDir, "vishu.sqlite3")
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true
+      }
+    );
+  }
   backend.on("error", (error) => {
     backendFailure = error;
   });
@@ -155,7 +169,9 @@ app.whenReady().then(async () => {
     dialog.showErrorBox(
       "VISHU could not start",
       String(error && error.message ? error.message : error) +
-      "\n\nInstall Python dependencies and verify VISHU_PYTHON."
+      (app.isPackaged
+        ? "\n\nRestart VISHU and verify your local model service is available."
+        : "\n\nInstall Python dependencies and verify VISHU_PYTHON.")
     );
     app.quit();
   }

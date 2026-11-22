@@ -16,7 +16,7 @@ Renderer --restricted IPC--> Electron main --Bearer token--> 127.0.0.1 FastAPI -
 - No model-authorized shell or filesystem tools are connected.
 - Never put provider API credentials into renderer JavaScript, Git history, or model memories.
 - Messages are plaintext in a local SQLite DB for this initial vertical slice; disk encryption and backup/export need their own acceptance work.
-- Development uses source Python and Electron. Production packaging is not yet implemented.
+- Development uses source Python and Electron. Windows packaging freezes the API with PyInstaller and bundles it as an Electron resource; the NSIS installer is currently unsigned.
 
 ## Planned modules
 AI Orchestrator / Model Router / Memory & Knowledge / Policy & Consent Broker / Tool Registry / Isolated Workers / Device Gateway / Event Audit & Rollback / Voice pipeline.
