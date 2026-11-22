@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { request, type ChatMessage, type Conversation, type Health } from "./api";
+import { createSpeechPlaybackController } from "./speech-playback.mjs";
 
 function shortDate(value: string): string {
   const time = Date.parse(value);
@@ -32,6 +33,21 @@ export default function App() {
   const streamFailureRef = useRef("");
   const completedConversationRef = useRef("");
   const speechBufferRef = useRef("");
+  const speechPlaybackRef = useRef<ReturnType<typeof createSpeechPlaybackController> | null>(null);
+
+  function speechPlayback() {
+    if (!speechPlaybackRef.current) {
+      speechPlaybackRef.current = createSpeechPlaybackController({
+        synth: window.speechSynthesis,
+        createUtterance: (text) => new SpeechSynthesisUtterance(text),
+        onSpeaking: setSpeaking,
+        onError: (reason) => setError(reason
+          ? `System speech playback failed (${reason}). Check that a Windows speech voice is installed.`
+          : "System speech playback failed. Check that a Windows speech voice is installed.")
+      });
+    }
+    return speechPlaybackRef.current;
+  }
 
   useEffect(() => {
     (async () => {
@@ -169,14 +185,7 @@ export default function App() {
   }
 
   function enqueueSpeech(text: string) {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(window.speechSynthesis.speaking);
-    utterance.onerror = () => {
-      setSpeaking(false);
-      setError("System speech playback failed or no speech voice is available.");
-    };
-    window.speechSynthesis.speak(utterance);
+    speechPlayback().speak(text);
   }
 
   function finishStreamSpeech() {
@@ -190,7 +199,7 @@ export default function App() {
     if (!streamId) return;
     activeStreamRef.current = null;
     window.vishu?.cancelStream(streamId);
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    if ("speechSynthesis" in window) speechPlayback().cancel();
     speechBufferRef.current = "";
     setSpeaking(false);
     setPending(null);
@@ -209,8 +218,7 @@ export default function App() {
   }
 
   function stopSpeech() {
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    setSpeaking(false);
+    if ("speechSynthesis" in window) speechPlayback().cancel();
   }
 
   async function openSelectedText() {
@@ -227,15 +235,9 @@ export default function App() {
       setError("System speech playback is unavailable in this environment.");
       return;
     }
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => {
-      setSpeaking(false);
-      setError("System speech playback failed or no speech voice is available.");
-    };
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    const playback = speechPlayback();
+    playback.cancel();
+    playback.speak(text);
   }
 
   function wavBase64(buffer: AudioBuffer): string {
