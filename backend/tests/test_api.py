@@ -227,7 +227,34 @@ def test_screen_capture_validates_png_and_uses_real_vision(monkeypatch, client):
     assert result.status_code == 200
     assert result.json()["answer"] == "A real vision result"
     assert calls[0][0] == "Read the heading"
+    assert calls[0][2] == api.get("/api/health").json()["vision_model"]
     assert api.post("/api/screen", json={"image_data_url": "data:image/png;base64,AA=="}, headers=headers()).status_code == 422
+
+
+def test_screen_uses_separately_configured_vision_model(tmp_path, monkeypatch):
+    monkeypatch.setenv("VISHU_MODEL", "chat-model")
+    monkeypatch.setenv("VISHU_VISION_MODEL", "vision-model")
+    calls = []
+    api_app = create_app(
+        database_path=tmp_path / "vision-model.db",
+        token="vision-token",
+        provider=lambda _messages, _model: "chat response",
+    )
+    with TestClient(api_app) as api:
+        assert api.get("/api/health").json()["configured_model"] == "chat-model"
+        assert api.get("/api/health").json()["vision_model"] == "vision-model"
+        monkeypatch.setattr(
+            app_module,
+            "complete_vision",
+            lambda question, image, model: calls.append((question, image, model)) or "visible text",
+        )
+        result = api.post(
+            "/api/screen",
+            json={"image_data_url": "data:image/png;base64,iVBORw0KGgo=", "question": "Read it"},
+            headers={"Authorization": "Bearer vision-token"},
+        )
+        assert result.status_code == 200
+        assert calls[0][2] == "vision-model"
 
 
 def test_screen_vision_failure_is_reported(monkeypatch, client):

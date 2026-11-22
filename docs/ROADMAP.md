@@ -16,13 +16,13 @@ This is an execution roadmap, not a claim that features are already working.
 ## Phase 2 — Voice and computer (features implemented; device acceptance pending)
 - [x] Offline microphone transcription through Vosk with explicit missing-model errors and a bundled small Indian English model in Windows installers
 - [x] System speech playback with stop control
-- [x] User-selected still-screen capture routed to a configured vision-capable model
+- [x] Explicit native consent followed by a user-selected still-screen preview routed to a configured vision-capable model
 - [x] Native-dialog, read-only text-file sharing with extension and size limits
 - [x] Model response streaming with cancellation propagated to the model request
 - [x] Incremental system speech playback with stop and replay controls
 - [x] Constrained user-selected text-file opening with per-action consent and a local audit log
 - [ ] Packaged desktop acceptance with a physical microphone and configured offline speech model
-- [ ] Screen chooser and screen understanding acceptance with a configured vision-capable model
+- [ ] Packaged screen preview, source selection, and understanding acceptance with a configured vision-capable model
 
 Arbitrary shell commands, file modification, and model-initiated Windows actions remain out of scope. The one Windows action above can only open a user-selected small text file after native confirmation.
 

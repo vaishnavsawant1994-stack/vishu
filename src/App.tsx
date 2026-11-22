@@ -17,6 +17,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [online, setOnline] = useState(false);
   const [model, setModel] = useState("Not configured");
+  const [visionModel, setVisionModel] = useState("Not configured");
   const [error, setError] = useState("");
   const [recording, setRecording] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
@@ -38,6 +39,7 @@ export default function App() {
         const health = await request<Health>("GET", "/api/health");
         setOnline(health.status === "ok");
         setModel(health.configured_model);
+        setVisionModel(health.vision_model || health.configured_model);
         const conversations = await request<Conversation[]>("GET", "/api/conversations");
         setItems(conversations);
       } catch (cause) {
@@ -307,24 +309,17 @@ export default function App() {
 
   async function understandScreen() {
     setError("");
-    let stream: MediaStream | null = null;
     try {
-      stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: false});
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      await video.play();
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.min(video.videoWidth, 1600);
-      canvas.height = Math.round(video.videoHeight * canvas.width / video.videoWidth);
-      canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-      stream.getTracks().forEach((track) => track.stop());
-      stream = null;
-      const image_data_url = canvas.toDataURL("image/png");
-      const result = await request<{answer: string}>("POST", "/api/screen", {image_data_url, question: screenQuestion});
+      const capture = await window.vishu?.captureScreen();
+      if (!capture) return;
+      const result = await request<{answer: string}>("POST", "/api/screen", {
+        image_data_url: capture.image_data_url,
+        question: screenQuestion
+      });
       setMessages((current) => [...current, {id: crypto.randomUUID(), role: "assistant", content: result.answer, created_at: new Date().toISOString()}]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Screen capture or image understanding failed.");
-    } finally { stream?.getTracks().forEach((track) => track.stop()); }
+    }
   }
 
   function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -382,7 +377,7 @@ export default function App() {
           <span className={"status-indicator " + (online ? "connected" : "")} />
           <div>
             <strong>{online ? "Local API online" : "API disconnected"}</strong>
-            <small>Model: {model}</small>
+            <small>Chat: {model} · Vision: {visionModel}</small>
           </div>
         </div>
       </aside>

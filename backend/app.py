@@ -60,6 +60,7 @@ def create_app(
     )
     store = ConversationStore(db)
     model_name = os.environ.get("VISHU_MODEL", "qwen2.5:3b")
+    vision_model_name = os.environ.get("VISHU_VISION_MODEL", model_name)
     complete = provider if provider is not None else complete_chat
     stream = stream_provider if stream_provider is not None else stream_chat
     vosk_model_path = os.environ.get("VISHU_VOSK_MODEL_PATH", "").strip()
@@ -76,7 +77,12 @@ def create_app(
 
     @app.get("/api/health")
     def health():
-        return {"status": "ok", "service": "vishu-api", "configured_model": model_name}
+        return {
+            "status": "ok",
+            "service": "vishu-api",
+            "configured_model": model_name,
+            "vision_model": vision_model_name,
+        }
 
     @app.post("/api/transcribe", dependencies=[Depends(authorize)])
     def transcribe(payload: AudioRequest):
@@ -123,7 +129,7 @@ def create_app(
         if len(image) > 5_000_000 or not image.startswith(b"\x89PNG\r\n\x1a\n"):
             raise HTTPException(status_code=422, detail="Screen image must be a PNG under 5 MB.")
         try:
-            answer = complete_vision(payload.question.strip(), payload.image_data_url, model_name)
+            answer = complete_vision(payload.question.strip(), payload.image_data_url, vision_model_name)
         except ModelUnavailable as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         return {"answer": answer}

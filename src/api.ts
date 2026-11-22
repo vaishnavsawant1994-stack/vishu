@@ -18,6 +18,7 @@ export interface Health {
   status: "ok";
   service: string;
   configured_model: string;
+  vision_model: string;
 }
 
 export interface ChatResponse {
@@ -31,6 +32,7 @@ declare global {
     vishu?: {
       request: (method: ApiMethod, path: string, body?: unknown) => Promise<unknown>;
       openTextFile: () => Promise<{name: string; content: string} | null>;
+      captureScreen: () => Promise<{image_data_url: string} | null>;
       openSelectedText: () => Promise<{opened: boolean; cancelled?: boolean}>;
       chatStream: (streamId: string, body: {text: string; conversation_id: string | null}) =>
         Promise<{complete: boolean; cancelled?: boolean}>;

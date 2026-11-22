@@ -8,6 +8,7 @@ const { spawn } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
 const { isAllowedTextFile, appendActionAudit } = require("./safety.cjs");
 const { resolveVoskModelPath } = require("./runtime.cjs");
+const { captureSelectedScreen, registerMediaHandlers } = require("./media.cjs");
 
 let backend = null;
 let backendPort = null;
@@ -160,6 +161,16 @@ ipcMain.handle("vishu:open-text-file", async (event) => {
   return { name: path.basename(filePath), content };
 });
 
+ipcMain.handle("vishu:capture-screen", (event) => captureSelectedScreen({
+  event,
+  window: BrowserWindow.fromWebContents(event.sender),
+  dialog,
+  desktopCapturer,
+  logError: (label, error) => process.stderr.write(
+    "[VISHU media] " + label + ": " + String(error?.message || error) + "\n"
+  )
+}));
+
 function recordAction(eventRecord) {
   appendActionAudit(app.getPath("userData"), eventRecord);
 }
@@ -285,34 +296,13 @@ function createWindow() {
   });
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  window.webContents.session.setPermissionRequestHandler(async (_webContents, permission, callback) => {
-    if (permission !== "media") return callback(false);
-    const answer = await dialog.showMessageBox(window, {
-      type: "question",
-      buttons: ["Allow microphone", "Deny"],
-      defaultId: 1,
-      cancelId: 1,
-      title: "Microphone access",
-      message: "Allow VISHU to use your microphone for this recording?"
-    });
-    callback(answer.response === 0);
-  });
-  window.webContents.session.setDisplayMediaRequestHandler(async (_request, callback) => {
-    try {
-      const sources = await desktopCapturer.getSources({ types: ["screen", "window"] });
-      const answer = await dialog.showMessageBox(window, {
-        type: "question",
-        buttons: [...sources.map((source) => source.name), "Cancel"],
-        defaultId: sources.length,
-        cancelId: sources.length,
-        title: "Choose what VISHU may view",
-        message: "Choose one screen or window. VISHU captures one still image and sends it to your configured model for this request only."
-      });
-      const source = sources[answer.response];
-      callback(source ? { video: source } : {});
-    } catch (_error) {
-      callback({});
-    }
+  registerMediaHandlers({
+    session: window.webContents.session,
+    window,
+    dialog,
+    logError: (label, error) => process.stderr.write(
+      "[VISHU media] " + label + ": " + String(error?.message || error) + "\n"
+    )
   });
   const devUrl = "http://127.0.0.1:5173";
   window.webContents.on("will-navigate", (event, target) => {

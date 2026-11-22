@@ -21,6 +21,7 @@ VISHU launches a local FastAPI service on a dynamically chosen loopback port. It
 ## Optional settings
 - VISHU_PYTHON: absolute path to the Python interpreter containing backend dependencies.
 - VISHU_MODEL: model ID, default qwen2.5:3b.
+- VISHU_VISION_MODEL: optional image-capable model ID used only for screen understanding; defaults to VISHU_MODEL.
 - VISHU_LLM_BASE_URL: OpenAI-compatible API URL, default http://127.0.0.1:11434/v1.
 - VISHU_LLM_API_KEY: optional API credential, only in the backend environment.
 - VISHU_VOSK_MODEL_PATH: optional path to an extracted offline Vosk speech model for development builds. The Windows installer bundles the official small Indian English model.
@@ -35,7 +36,7 @@ On Windows, install the production API and packaging dependencies plus npm packa
 2. `npm ci`
 3. `npm run dist:win`
 
-The unsigned NSIS installer is written to `release/installers`. It includes a frozen Python API, so end users do not need Python installed. Ollama and a compatible model remain separate prerequisites; VISHU does not download models automatically. The default model is `qwen2.5:3b`; set `VISHU_MODEL` before launching to select another installed model.
+The unsigned NSIS installer is written to `release/installers`. It includes a frozen Python API, so end users do not need Python installed. Ollama and compatible models remain separate prerequisites; VISHU does not download models automatically. The default chat model is `qwen2.5:3b`; set `VISHU_MODEL` before launching to select another installed model. Set `VISHU_VISION_MODEL` to a separately installed image-capable model when the chat model does not accept images.
 
 ## Testing
 - Python API: python -m pip install -r backend/requirements-dev.txt, then python -m pytest
@@ -44,7 +45,7 @@ The unsigned NSIS installer is written to `release/installers`. It includes a fr
 ## Phase 2 capabilities and limits
 - A standalone Vite browser page intentionally cannot call the authenticated backend. Run through Electron.
 - Voice input uses offline Vosk. The Windows installer bundles the small Indian English model (Apache 2.0; license included); development builds can use a separately downloaded model from the [official Vosk model list](https://alphacephei.com/vosk/models) by setting `VISHU_VOSK_MODEL_PATH`. Responses stream from the configured model. Stop response cancels generation and queued speech; interrupted turns are not saved. Speech uses the available Windows/browser system voice and is delivered in short text segments as they arrive.
-- Screen understanding uses the OS/browser screen chooser and sends the selected still image to the configured OpenAI-compatible model. The selected model must support image input; local text-only models return an explicit error. Screen images are not stored in conversation history.
+- Screen understanding requires a separate user choice of one screen/window and sends one still image to the configured vision model. `VISHU_VISION_MODEL` can select an image-capable local model independently of the chat model. Local text-only models return an explicit error. Screen images are not stored in conversation history; only the model's text answer appears in the chat.
 - Text file sharing is read-only and limited to user-selected `.txt`, `.md`, `.csv`, `.json`, and `.log` files under 100 KB. The contents are included in the user message and therefore saved in the local conversation history.
 - The separate Open text file action accepts only the same small plain-text formats, asks for confirmation immediately before opening the chosen file in its default Windows application, and records consent and outcome in audit/actions.jsonl inside VISHU's user-data folder. The model cannot invoke this action.
 - General Windows computer control, arbitrary shell execution, file modification, device connectivity and rich memory are not implemented. Physical microphone and vision-model acceptance requires suitable hardware and a configured vision-capable model.
