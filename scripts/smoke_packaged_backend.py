@@ -210,7 +210,7 @@ def main():
                         backend.kill()
                         backend.wait(timeout=5)
                     time.sleep(0.3)
-            with sqlite3.connect(db) as connection:
+            with contextlib.closing(sqlite3.connect(db)) as connection:
                 count = connection.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
                 assert count == 4, f"Unexpected persisted count: {count}"
                 all_text = " ".join(row[0] for row in connection.execute("SELECT content FROM messages"))
