@@ -23,6 +23,8 @@ This is an execution roadmap, not a claim that features are already working.
 - [x] Constrained user-selected text-file opening with per-action consent and a local audit log
 - [x] Physical microphone hardware confirmed working by the user on 2026-11-23
 - [ ] Packaged desktop acceptance with a physical microphone and configured offline speech model
+- [x] One-instance window lifecycle and restricted main-frame IPC protections
+- [ ] Frozen Windows backend integration smoke in CI (requires passing latest CI run)
 - [ ] Packaged screen preview, source selection, and understanding acceptance with a configured vision-capable model
 
 Windows development-desktop checks on 2026-11-22 confirmed local screen capture and a real response from `qwen2.5vl:3b`. The offline Vosk API transcribed a known local WAV phrase. The user confirmed the physical microphone works on 2026-11-23. The earlier VISHU recording attempt returned no recognized words, so successful live transcription through VISHU still needs confirmation. The packaged installer built in CI; running the packaged app on Windows remains unverified.

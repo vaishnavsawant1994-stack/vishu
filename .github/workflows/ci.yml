@@ -46,6 +46,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run test:desktop
       - run: npm run dist:win
+      - name: Verify frozen Windows backend, streaming, vision and SQLite
+        run: python scripts/smoke_packaged_backend.py
       - uses: actions/upload-artifact@v4
         with:
           name: vishu-windows-installer

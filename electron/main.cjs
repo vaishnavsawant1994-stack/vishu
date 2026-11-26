@@ -9,12 +9,24 @@ const { randomBytes } = require("node:crypto");
 const { isAllowedTextFile, appendActionAudit } = require("./safety.cjs");
 const { resolveVoskModelPath } = require("./runtime.cjs");
 const { captureSelectedScreen, registerMediaHandlers } = require("./media.cjs");
+const { registerSingleInstance } = require("./lifecycle.cjs");
 
 let backend = null;
 let backendPort = null;
 let backendFailure = null;
 const sessionToken = randomBytes(32).toString("hex");
 const activeStreams = new Map();
+let mainWindow = null;
+const isPrimaryInstance = registerSingleInstance(app, () => mainWindow);
+
+function trustedOwner(event) {
+  const owner = event && BrowserWindow.fromWebContents(event.sender);
+  if (!owner || !owner.webContents || event.senderFrame !== owner.webContents.mainFrame ||
+      event.sender.isDestroyed()) {
+    throw new Error("This operation must originate from the active VISHU main window.");
+  }
+  return owner;
+}
 
 function getVoskModelPath() {
   return resolveVoskModelPath({
@@ -119,7 +131,8 @@ async function startBackend() {
   await waitUntilHealthy();
 }
 
-ipcMain.handle("vishu:api", async (_event, input) => {
+ipcMain.handle("vishu:api", async (event, input) => {
+  trustedOwner(event);
   if (!input || typeof input !== "object" || !backendPort) {
     throw new Error("VISHU backend is not ready.");
   }
@@ -146,7 +159,7 @@ ipcMain.handle("vishu:api", async (_event, input) => {
 });
 
 ipcMain.handle("vishu:open-text-file", async (event) => {
-  const owner = BrowserWindow.fromWebContents(event.sender);
+  const owner = trustedOwner(event);
   const choice = await dialog.showOpenDialog(owner, {
     title: "Choose a text file to share with VISHU",
     properties: ["openFile"],
@@ -176,7 +189,7 @@ function recordAction(eventRecord) {
 }
 
 ipcMain.handle("vishu:open-selected-text", async (event) => {
-  const owner = BrowserWindow.fromWebContents(event.sender);
+  const owner = trustedOwner(event);
   const choice = await dialog.showOpenDialog(owner, {
     title: "Choose a text document to open",
     properties: ["openFile"],
@@ -215,18 +228,21 @@ ipcMain.handle("vishu:open-selected-text", async (event) => {
 });
 
 ipcMain.on("vishu:cancel-stream", (event, streamId) => {
+  try { trustedOwner(event); } catch (_error) { return; }
   if (typeof streamId !== "string") return;
   const key = event.sender.id + ":" + streamId;
   activeStreams.get(key)?.abort();
 });
 
 ipcMain.handle("vishu:chat-stream", async (event, input) => {
+  trustedOwner(event);
   if (!input || typeof input.streamId !== "string" || input.streamId.length > 80 ||
       !input.body || typeof input.body !== "object" ||
       !isAllowedRequest("POST", "/api/chat/stream") || !backendPort) {
     throw new Error("This streaming action is not authorized.");
   }
   const key = event.sender.id + ":" + input.streamId;
+  if (activeStreams.has(key)) throw new Error("A stream with this ID is already active.");
   const controller = new AbortController();
   activeStreams.set(key, controller);
   const timeout = setTimeout(() => controller.abort(), 80000);
@@ -273,7 +289,7 @@ ipcMain.handle("vishu:chat-stream", async (event, input) => {
     throw error;
   } finally {
     clearTimeout(timeout);
-    activeStreams.delete(key);
+    if (activeStreams.get(key) === controller) activeStreams.delete(key);
   }
 });
 
@@ -295,6 +311,8 @@ function createWindow() {
     }
   });
 
+  mainWindow = window;
+  window.on("closed", () => { if (mainWindow === window) mainWindow = null; });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   registerMediaHandlers({
     session: window.webContents.session,
@@ -316,7 +334,7 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(async () => {
+if (isPrimaryInstance) app.whenReady().then(async () => {
   try {
     await startBackend();
     createWindow();
@@ -336,7 +354,11 @@ app.on("window-all-closed", () => {
   app.quit();
 });
 
+if (!isPrimaryInstance) app.quit();
+
 app.on("before-quit", () => {
+  for (const controller of activeStreams.values()) controller.abort();
+  activeStreams.clear();
   if (backend && backend.exitCode === null) {
     backend.kill();
   }
