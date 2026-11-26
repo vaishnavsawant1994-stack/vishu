@@ -26,6 +26,7 @@ export default function App() {
   const [streamingAssistant, setStreamingAssistant] = useState("");
   const [attachment, setAttachment] = useState<{name: string; content: string} | null>(null);
   const [screenQuestion, setScreenQuestion] = useState("What is on my screen?");
+  const [windowsApp, setWindowsApp] = useState<"notepad" | "calculator" | "explorer">("notepad");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const endOfMessages = useRef<HTMLDivElement>(null);
   const selectedRef = useRef<string | null>(null);
@@ -227,6 +228,16 @@ export default function App() {
       if (result?.opened) setError("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Windows could not open that file.");
+    }
+  }
+
+  async function openWindowsApplication() {
+    setError("");
+    try {
+      const result = await window.vishu?.launchApplication(windowsApp);
+      if (result?.launched) setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Windows application launch failed.");
     }
   }
 
@@ -469,6 +480,12 @@ export default function App() {
             </button>
             <button type="button" onClick={() => void chooseFile()} disabled={busy}>Attach text file</button>
             <button type="button" onClick={() => void openSelectedText()} disabled={busy}>Open text file…</button>
+            <select value={windowsApp} onChange={(event) => setWindowsApp(event.target.value as "notepad" | "calculator" | "explorer")} aria-label="Approved Windows application" disabled={busy}>
+              <option value="notepad">Notepad</option>
+              <option value="calculator">Calculator</option>
+              <option value="explorer">File Explorer</option>
+            </select>
+            <button type="button" onClick={() => void openWindowsApplication()} disabled={busy}>Open app…</button>
             <input aria-label="Question about screen" value={screenQuestion} onChange={(event) => setScreenQuestion(event.target.value)} maxLength={500} />
             <button type="button" onClick={() => void understandScreen()} disabled={busy}>Share screen…</button>
             {busy && <button type="button" onClick={stopResponse}>Stop response</button>}

@@ -21,6 +21,7 @@ This is an execution roadmap, not a claim that features are already working.
 - [x] Model response streaming with cancellation propagated to the model request
 - [x] Incremental system speech playback with stop and replay controls
 - [x] Constrained user-selected text-file opening with per-action consent and a local audit log
+- [x] Allowlisted Notepad, Calculator and File Explorer launching with native consent and audit logging
 - [x] Physical microphone hardware confirmed working by the user on 2026-11-23
 - [ ] Packaged desktop acceptance with a physical microphone and configured offline speech model
 - [x] One-instance window lifecycle and restricted main-frame IPC protections

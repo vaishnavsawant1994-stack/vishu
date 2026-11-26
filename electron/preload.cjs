@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("vishu", Object.freeze({
   openTextFile: () => ipcRenderer.invoke("vishu:open-text-file"),
   captureScreen: () => ipcRenderer.invoke("vishu:capture-screen"),
   openSelectedText: () => ipcRenderer.invoke("vishu:open-selected-text"),
+  launchApplication: (appId) => ipcRenderer.invoke("vishu:launch-application", appId),
   chatStream: (streamId, body) => ipcRenderer.invoke("vishu:chat-stream", { streamId, body }),
   cancelStream: (streamId) => ipcRenderer.send("vishu:cancel-stream", streamId),
   onChatStream: (callback) => {

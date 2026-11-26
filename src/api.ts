@@ -34,6 +34,7 @@ declare global {
       openTextFile: () => Promise<{name: string; content: string} | null>;
       captureScreen: () => Promise<{image_data_url: string} | null>;
       openSelectedText: () => Promise<{opened: boolean; cancelled?: boolean}>;
+      launchApplication: (id: "notepad" | "calculator" | "explorer") => Promise<{launched: boolean; cancelled?: boolean}>;
       chatStream: (streamId: string, body: {text: string; conversation_id: string | null}) =>
         Promise<{complete: boolean; cancelled?: boolean}>;
       cancelStream: (streamId: string) => void;

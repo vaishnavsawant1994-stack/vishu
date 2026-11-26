@@ -10,6 +10,7 @@ const { isAllowedTextFile, appendActionAudit } = require("./safety.cjs");
 const { resolveVoskModelPath } = require("./runtime.cjs");
 const { captureSelectedScreen, registerMediaHandlers } = require("./media.cjs");
 const { registerSingleInstance } = require("./lifecycle.cjs");
+const { resolveApplication, launchAllowedApplication } = require("./apps.cjs");
 
 let backend = null;
 let backendPort = null;
@@ -225,6 +226,36 @@ ipcMain.handle("vishu:open-selected-text", async (event) => {
   }
   recordAction({ action: "open-selected-text", decision: "completed", file: path.basename(filePath) });
   return { opened: true };
+});
+
+ipcMain.handle("vishu:launch-application", async (event, appId) => {
+  const owner = trustedOwner(event);
+  const target = resolveApplication(appId);
+  if (!target || process.platform !== "win32") {
+    throw new Error("Only approved Windows applications can be launched.");
+  }
+  const choice = await dialog.showMessageBox(owner, {
+    type: "question",
+    buttons: ["Open application", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    title: "Approve Windows action",
+    message: "Allow VISHU to open " + target.label + "?",
+    detail: "This launches only the approved Windows application with no arguments. The action is logged."
+  });
+  if (choice.response !== 0) {
+    recordAction({ action: "launch-application", application: appId, decision: "denied" });
+    return { launched: false, cancelled: true };
+  }
+  recordAction({ action: "launch-application", application: appId, decision: "authorized" });
+  try {
+    await launchAllowedApplication(appId);
+  } catch (_error) {
+    recordAction({ action: "launch-application", application: appId, decision: "failed" });
+    throw new Error("Windows could not start the selected application.");
+  }
+  recordAction({ action: "launch-application", application: appId, decision: "completed" });
+  return { launched: true };
 });
 
 ipcMain.on("vishu:cancel-stream", (event, streamId) => {
