@@ -52,3 +52,7 @@ The unsigned NSIS installer is written to `release/installers`. It includes a fr
 - General Windows computer control, arbitrary shell execution, file modification, device connectivity and rich memory are not implemented. Physical microphone and vision-model acceptance requires suitable hardware and a configured vision-capable model.
 - Windows installer packaging is supported by `npm run dist:win`; it downloads the pinned official Vosk model, verifies its SHA-256, and includes it in the installer. Packaged backend shutdown uses Windows process-tree termination to prevent frozen PyInstaller child processes from lingering. The installer is unsigned. Install Ollama and a compatible chat model separately.
 - Backend availability does not guarantee an AI model is installed. Missing models produce an error instead of a simulated AI response.
+
+## Development release version
+
+The Phase 2 acceptance build is identified as `0.2.0-beta.1` so that its unsigned NSIS installer is distinguishable from the earlier `0.1.0` Phase 1 installer. This label does not mean Windows hardware acceptance has passed.
