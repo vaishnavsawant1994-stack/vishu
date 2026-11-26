@@ -197,12 +197,20 @@ def main():
                         "user", "assistant", "user", "assistant"
                     ]
                 finally:
-                    backend.terminate()
+                    # PyInstaller --onefile launches a child process on Windows.
+                    # Terminating only the bootloader leaves its child holding
+                    # handles and the loopback API alive after the test.
+                    subprocess.run(
+                        ["taskkill", "/PID", str(backend.pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        timeout=15, check=False,
+                    )
                     try:
                         backend.wait(timeout=10)
                     except subprocess.TimeoutExpired:
                         backend.kill()
                         backend.wait(timeout=5)
+                    time.sleep(0.3)
             with sqlite3.connect(db) as connection:
                 count = connection.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
                 assert count == 4, f"Unexpected persisted count: {count}"

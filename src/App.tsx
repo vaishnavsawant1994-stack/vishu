@@ -26,6 +26,8 @@ export default function App() {
   const [streamingAssistant, setStreamingAssistant] = useState("");
   const [attachment, setAttachment] = useState<{name: string; content: string} | null>(null);
   const [screenQuestion, setScreenQuestion] = useState("What is on my screen?");
+  const [screenPreview, setScreenPreview] = useState<string | null>(null);
+  const [screenBusy, setScreenBusy] = useState(false);
   const [windowsApp, setWindowsApp] = useState<"notepad" | "calculator" | "explorer">("notepad");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const endOfMessages = useRef<HTMLDivElement>(null);
@@ -325,13 +327,31 @@ export default function App() {
     try {
       const capture = await window.vishu?.captureScreen();
       if (!capture) return;
+      // Never upload the captured image until the user reviews it and confirms.
+      setScreenPreview(capture.image_data_url);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Screen capture failed.");
+    }
+  }
+
+  async function confirmScreenShare() {
+    if (!screenPreview || screenBusy) return;
+    setScreenBusy(true);
+    setError("");
+    try {
       const result = await request<{answer: string}>("POST", "/api/screen", {
-        image_data_url: capture.image_data_url,
+        image_data_url: screenPreview,
         question: screenQuestion
       });
-      setMessages((current) => [...current, {id: crypto.randomUUID(), role: "assistant", content: result.answer, created_at: new Date().toISOString()}]);
+      setMessages((current) => [...current, {
+        id: "screen:" + crypto.randomUUID(), role: "assistant", content: result.answer,
+        created_at: new Date().toISOString()
+      }]);
+      setScreenPreview(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Screen capture or image understanding failed.");
+      setError(cause instanceof Error ? cause.message : "Screen understanding failed.");
+    } finally {
+      setScreenBusy(false);
     }
   }
 
@@ -422,7 +442,7 @@ export default function App() {
                 <div key={message.id} className={"message-row " + message.role}>
                   <div className="message-avatar">{message.role === "user" ? "YOU" : "V"}</div>
                   <div className="message-content">
-                    <div className="message-name">{message.role === "user" ? "You" : "VISHU"}</div>
+                    <div className="message-name">{message.id.startsWith("screen:") ? "VISHU · Temporary screen analysis (not saved)" : message.role === "user" ? "You" : "VISHU"}</div>
                     <div className="message-text">{message.content}</div>
                     {message.role === "assistant" && <button className="speak-message" type="button" onClick={() => playSpeech(message.content)}>Play voice</button>}
                   </div>
@@ -487,7 +507,7 @@ export default function App() {
             </select>
             <button type="button" onClick={() => void openWindowsApplication()} disabled={busy}>Open app…</button>
             <input aria-label="Question about screen" value={screenQuestion} onChange={(event) => setScreenQuestion(event.target.value)} maxLength={500} />
-            <button type="button" onClick={() => void understandScreen()} disabled={busy}>Share screen…</button>
+            <button type="button" onClick={() => void understandScreen()} disabled={busy || screenBusy}>Share screen…</button>
             {busy && <button type="button" onClick={stopResponse}>Stop response</button>}
             {speaking && !busy && <button type="button" onClick={stopSpeech}>Stop speaking</button>}
           </div>
@@ -498,6 +518,22 @@ export default function App() {
           </p>
         </div>
       </main>
+      {screenPreview && (
+        <div className="screen-preview-overlay">
+          <section className="screen-preview-panel" role="dialog" aria-modal="true" aria-label="Review screen before sharing">
+            <h2>Review the selected screen</h2>
+            <p>The image below stays in VISHU until you approve sending this one still frame to your configured vision model.</p>
+            <img src={screenPreview} alt="Selected screen or window capture awaiting your approval" />
+            <div className="screen-preview-question"><strong>Question:</strong> {screenQuestion}</div>
+            <div className="screen-preview-actions">
+              <button type="button" autoFocus onClick={() => setScreenPreview(null)} disabled={screenBusy}>Cancel · do not share</button>
+              <button type="button" onClick={() => void confirmScreenShare()} disabled={screenBusy}>
+                {screenBusy ? "Analyzing…" : "Confirm and send to vision model"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

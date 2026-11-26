@@ -11,6 +11,7 @@ const { resolveVoskModelPath } = require("./runtime.cjs");
 const { captureSelectedScreen, registerMediaHandlers } = require("./media.cjs");
 const { registerSingleInstance } = require("./lifecycle.cjs");
 const { resolveApplication, launchAllowedApplication } = require("./apps.cjs");
+const { stopBackendProcess } = require("./process.cjs");
 
 let backend = null;
 let backendPort = null;
@@ -390,7 +391,5 @@ if (!isPrimaryInstance) app.quit();
 app.on("before-quit", () => {
   for (const controller of activeStreams.values()) controller.abort();
   activeStreams.clear();
-  if (backend && backend.exitCode === null) {
-    backend.kill();
-  }
+  stopBackendProcess(backend);
 });

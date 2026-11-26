@@ -106,6 +106,21 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border: 1px solid #924f65; background: #3e1c2c; color: #ffc4d3; border-radius: 11px;
   padding: 10px 13px; font-size: 12px; margin-bottom: 10px; }
 .error-message button { border: 0; background: transparent; color: inherit; font-size: 20px; }
+.screen-preview-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
+  background: #040914dd; padding: 20px; }
+.screen-preview-panel { width: min(760px, 100%); max-height: 90vh; overflow-y: auto;
+  border: 1px solid #426782; border-radius: 16px; background: #0e1b30; padding: 20px;
+  box-shadow: 0 24px 70px #000a; }
+.screen-preview-panel h2 { margin: 0 0 8px; font-size: 21px; }
+.screen-preview-panel p { color: #a4bbd1; font-size: 13px; line-height: 1.6; }
+.screen-preview-panel img { display: block; width: 100%; max-height: 48vh; object-fit: contain;
+  border-radius: 9px; border: 1px solid #32526d; background: #070d16; }
+.screen-preview-question { margin-top: 11px; color: #bdd8ee; font-size: 12px; }
+.screen-preview-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.screen-preview-actions button { border: 1px solid #426782; border-radius: 10px; padding: 10px 15px;
+  background: #143452; color: #e1f6ff; font-size: 12px; }
+.screen-preview-actions button:last-child { background: #166b96; border-color: #3dafd7; }
+.screen-preview-actions button:disabled { opacity: .55; cursor: not-allowed; }
 @media (max-width: 820px) {
   .sidebar { flex-basis: 225px; }
   .topbar { padding: 16px 20px; }
