@@ -36,7 +36,7 @@ On Windows, install the production API and packaging dependencies plus npm packa
 2. `npm ci`
 3. `npm run dist:win`
 
-The unsigned NSIS installer is written to `release/installers`. It includes a frozen Python API, so end users do not need Python installed. Ollama and compatible models remain separate prerequisites; VISHU does not download models automatically. The default chat model is `qwen2.5:3b`; set `VISHU_MODEL` before launching to select another installed model. Set `VISHU_VISION_MODEL` to a separately installed image-capable model when the chat model does not accept images.
+The unsigned NSIS installer is written to `release/installers`. It includes a PyInstaller one-directory Python API (executable and dependency directory), so end users do not need Python installed. Ollama and compatible models remain separate prerequisites; VISHU does not download models automatically. The default chat model is `qwen2.5:3b`; set `VISHU_MODEL` before launching to select another installed model. Set `VISHU_VISION_MODEL` to a separately installed image-capable model when the chat model does not accept images.
 
 ## Testing
 - Python API: python -m pip install -r backend/requirements-dev.txt, then python -m pytest

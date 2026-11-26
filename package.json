@@ -13,7 +13,7 @@
     "test:desktop": "node --check electron/main.cjs && node --check electron/preload.cjs && node --test electron/tests/*.test.cjs",
     "prepare:vosk": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-vosk.ps1",
     "preview": "vite preview --host 127.0.0.1",
-    "package:backend": "python -m PyInstaller --noconfirm --clean --onefile --collect-all vosk --name VISHUBackend --paths backend --distpath release/phase2-backend-final --workpath release/pyinstaller/phase2-final-work --specpath release/pyinstaller/phase2-final-spec backend/entrypoint.py",
+    "package:backend": "python -m PyInstaller --noconfirm --clean --onedir --collect-all vosk --name VISHUBackend --paths backend --distpath release/phase2-backend-final --workpath release/pyinstaller/phase2-final-work --specpath release/pyinstaller/phase2-final-spec backend/entrypoint.py",
     "dist:win": "npm run prepare:vosk && npm run build && npm run package:backend && electron-builder --win nsis --publish never"
   },
   "dependencies": {
@@ -46,8 +46,8 @@
     ],
     "extraResources": [
       {
-        "from": "release/phase2-backend-final/VISHUBackend.exe",
-        "to": "backend/VISHUBackend.exe"
+        "from": "release/phase2-backend-final/VISHUBackend",
+        "to": "backend"
       },
       {
         "from": "release/phase2-vosk-model",

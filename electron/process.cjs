@@ -4,8 +4,8 @@ const { spawn } = require("node:child_process");
 
 /**
  * Terminate the whole frozen PyInstaller process tree on Windows.
- * The onefile bootloader launches a child; killing just its PID can leave
- * the API running and lock its stdout log. The caller must own the process.
+ * This covers the frozen process and any subprocesses while keeping
+ * the API and SQLite handles from lingering. The caller owns the process.
  */
 function stopBackendProcess(backend, { platform = process.platform, launcher = spawn } = {}) {
   if (!backend || !Number.isInteger(backend.pid)) return false;

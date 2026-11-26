@@ -28,7 +28,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXECUTABLE = ROOT / "release" / "phase2-backend-final" / "VISHUBackend.exe"
+EXECUTABLE = ROOT / "release" / "phase2-backend-final" / "VISHUBackend" / "VISHUBackend.exe"
 VOSK_MODEL = ROOT / "release" / "phase2-vosk-model"
 TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WJACPYAAAAASUVORK5CYII="
 
@@ -197,9 +197,8 @@ def main():
                         "user", "assistant", "user", "assistant"
                     ]
                 finally:
-                    # PyInstaller --onefile launches a child process on Windows.
-                    # Terminating only the bootloader leaves its child holding
-                    # handles and the loopback API alive after the test.
+                    # Kill the frozen executable and any children on Windows.
+                    # The onedir distribution avoids the separate onefile bootloader.
                     subprocess.run(
                         ["taskkill", "/PID", str(backend.pid), "/T", "/F"],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
